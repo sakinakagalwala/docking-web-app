@@ -1,62 +1,50 @@
 import streamlit as st
-import py3dmol
+import subprocess
 import os
+import uuid
 
-st.set_page_config(page_title="Docking App (Demo)", layout="wide")
-st.title("Protein-Ligand Docking App (Demo Mode)")
+def run_vina(protein_path, ligand_path, output_path):
+    cmd = [
+        'vina', 
+        '--receptor', protein_path,
+        '--ligand', ligand_path,
+        '--center_x', '0', '--center_y', '0', '--center_z', '0',
+        '--size_x', '20', '--size_y', '20', '--size_z', '20',
+        '--out', output_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.stdout, result.stderr
 
-st.markdown("""
-### ⚠️ Notice
-This app is running in **demo mode on Streamlit Cloud**. Due to system restrictions:
-- Real molecular docking is **disabled**.
-- You can upload PDBQT files and view them in **3D**.
-- For actual docking using AutoDock Vina, run the app **locally** on your computer.
+st.set_page_config(page_title="Simple Docking App")
 
-To run locally:
-```bash
-streamlit run docking_app.py
-```
-""")
+st.title("🧪 AutoDock Vina Docking")
 
-# Upload protein and ligand
-col1, col2 = st.columns(2)
-with col1:
-    protein_file = st.file_uploader("Upload Protein (.pdbqt)", type=["pdbqt"], key="protein")
-with col2:
-    ligand_file = st.file_uploader("Upload Ligand (.pdbqt)", type=["pdbqt"], key="ligand")
+protein = st.file_uploader("Upload Protein (PDBQT)", type=['pdbqt'])
+ligand = st.file_uploader("Upload Ligand (PDBQT)", type=['pdbqt'])
 
-# Display in 3D using py3Dmol
-def show_3d_structure(pdbqt_data, title):
-    view = py3dmol.view(width=400, height=400)
-    view.addModel(pdbqt_data, "pdbqt")
-    view.setStyle({"cartoon": {"color": "spectrum"}})
-    view.zoomTo()
-    view.setBackgroundColor("white")
-    st.subheader(title)
-    st.pydeck_chart(view)
+if st.button("Run Docking"):
+    if protein and ligand:
+        temp_dir = f"tmp_{uuid.uuid4().hex[:8]}"
+        os.makedirs(temp_dir, exist_ok=True)
 
-if protein_file:
-    st.info("Protein file uploaded successfully.")
-    protein_data = protein_file.read().decode("utf-8")
-    with st.expander("View Protein (3D)"):
-        show_3d_structure(protein_data, "Protein Structure")
+        protein_path = os.path.join(temp_dir, "protein.pdbqt")
+        ligand_path = os.path.join(temp_dir, "ligand.pdbqt")
+        output_path = os.path.join(temp_dir, "docked.pdbqt")
 
-if ligand_file:
-    st.info("Ligand file uploaded successfully.")
-    ligand_data = ligand_file.read().decode("utf-8")
-    with st.expander("View Ligand (3D)"):
-        show_3d_structure(ligand_data, "Ligand Structure")
+        with open(protein_path, 'wb') as f:
+            f.write(protein.read())
+        with open(ligand_path, 'wb') as f:
+            f.write(ligand.read())
 
-# Placeholder for docking
-if protein_file and ligand_file:
-    st.markdown("---")
-    st.header("Docking Simulation")
-    st.success("✅ Files are ready. If running locally, this is where docking would start.")
-    st.code("""
-    vina --receptor protein.pdbqt --ligand ligand.pdbqt \
-         --center_x 0 --center_y 0 --center_z 0 \
-         --size_x 20 --size_y 20 --size_z 20 --out out.pdbqt
-    """, language="bash")
-    st.warning("🚫 Real docking is disabled on Streamlit Cloud.")
-else:
-    st.info("Upload both protein and ligand files to begin.")
+        st.info("Running docking...")
+        stdout, stderr = run_vina(protein_path, ligand_path, output_path)
+
+        st.subheader("Docking Log")
+        st.code(stdout if stdout else stderr)
+
+        if os.path.exists(output_path):
+            with open(output_path, "rb") as file:
+                st.download_button("Download Docked Complex", file, file_name="docked.pdbqt")
+
+        # Clean up temp files (optional)
+        # import shutil; shutil.rmtree(temp_di
