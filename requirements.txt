@@ -1,2 +1,2 @@
 streamlit
-py3dmol==2.4.2
+
